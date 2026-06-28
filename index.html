@@ -117,5 +117,118 @@
   <p>&copy; 2026 bITe. <a href="index.html">Back to home</a></p>
 </footer>
 <script src="nav.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Step 1: Build the CSV URL and detect the current page name from the URL.
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/1nj_PFpwWz5iz6bm4S41XTnFyS13a50zFHMgPPVfYpaQ/edit?usp=sharing'
+    const currentPage = window.location.pathname
+      .split('/')
+      .pop()
+      .replace(/\.html?$/i, '')
+      .toLowerCase();
+
+    // Step 2: Fetch the published CSV from Google Sheets.
+    fetch(csvUrl)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.text();
+      })
+      .then((csvText) => {
+        // Step 3: Convert the CSV text into rows so the data can be read easily.
+        const rows = parseCSV(csvText);
+        const headers = rows[0] || [];
+        const dataRows = rows.slice(1);
+
+        // Step 4: Find the rows that match the current page.
+        const matchedRows = dataRows.filter((row) => {
+          const pageColumnIndex = headers.indexOf('page');
+          if (pageColumnIndex === -1) return false;
+
+          const rowPage = normalizeValue(row[pageColumnIndex]);
+          return rowPage === currentPage || (currentPage === 'index' && rowPage === 'home');
+        });
+
+        // Step 5: Loop through each matching row and fill the correct element.
+        matchedRows.forEach((row) => {
+          const sectionColumnIndex = headers.indexOf('section');
+          const typeColumnIndex = headers.indexOf('type');
+          const contentColumnIndex = headers.indexOf('content');
+
+          if (sectionColumnIndex === -1 || typeColumnIndex === -1 || contentColumnIndex === -1) {
+            return;
+          }
+
+          const section = normalizeValue(row[sectionColumnIndex]);
+          const type = normalizeValue(row[typeColumnIndex]);
+          const content = row[contentColumnIndex] || '';
+
+          // Step 6: Build the target element ID using the section name and content type.
+          const elementId = type === 'heading' ? `${section}-heading` : `${section}-paragraph`;
+          const targetElement = document.getElementById(elementId);
+
+          // Step 7: Update the element if it exists on the page.
+          if (targetElement) {
+            targetElement.innerHTML = content;
+          }
+        });
+      })
+      .catch((error) => {
+        // Step 8: Log any errors so they are easier to debug.
+        console.error('Unable to load page content:', error);
+      });
+  });
+
+  // Helper function to parse simple CSV text with quoted values.
+  function parseCSV(text) {
+    const rows = [];
+    let row = [];
+    let value = '';
+    let insideQuotes = false;
+
+    for (let i = 0; i < text.length; i += 1) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (char === '"') {
+        if (insideQuotes && nextChar === '"') {
+          value += '"';
+          i += 1;
+        } else {
+          insideQuotes = !insideQuotes;
+        }
+      } else if (char === ',' && !insideQuotes) {
+        row.push(value);
+        value = '';
+      } else if ((char === '\n' || char === '\r') && !insideQuotes) {
+        if (char === '\r' && nextChar === '\n') {
+          i += 1;
+        }
+        row.push(value);
+        rows.push(row);
+        row = [];
+        value = '';
+      } else {
+        value += char;
+      }
+    }
+
+    if (value.length > 0 || row.length > 0) {
+      row.push(value);
+      rows.push(row);
+    }
+
+    return rows;
+  }
+
+  function normalizeValue(value) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\.html?$/i, '')
+      .replace(/\s+/g, '-');
+  }
+</script>
 </body>
 </html>
